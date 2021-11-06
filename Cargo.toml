@@ -19,6 +19,9 @@ futures = "0"
 bytes = "1"
 headers = "0"
 chrono = "0"
+cookie = "0"
+time = "0.2"
+serde = "1"
 
 [profile.release]
 opt-level = 3

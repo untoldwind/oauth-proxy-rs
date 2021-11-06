@@ -45,6 +45,9 @@ async fn main() -> anyhow::Result<()> {
         login_cookie: opts.login_cookie,
         auth_cookie: opts.auth_cookie,
         refresh_cookie: opts.refresh_cookie,
+        cookie_path: opts.cookie_path,
+        cookie_secure: opts.cookie_secure,
+        cookie_domain: opts.cookie_domain,
     })
     .await;
 

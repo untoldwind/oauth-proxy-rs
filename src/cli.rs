@@ -24,7 +24,11 @@ pub struct Opts {
     #[clap(long, default_value = "0.0.0.0:8080", env = "OAUTH_PROXY_BIND_ADDRESS")]
     pub bind_address: String,
 
-    #[clap(long, default_value = "http://localhost:8080", env = "OAUTH_PROXY_EXTERNAL_URL")]
+    #[clap(
+        long,
+        default_value = "http://localhost:8080",
+        env = "OAUTH_PROXY_EXTERNAL_URL"
+    )]
     pub external_url: String,
 
     #[clap(long, env = "OAUTH_PROXY_BACKEND")]
@@ -53,4 +57,13 @@ pub struct Opts {
         env = "OAUTH_PROXY_AUTH_REFRESH"
     )]
     pub refresh_cookie: String,
+
+    #[clap(long, default_value = "/", env = "OAUTH_PROXY_COOKIE_PATH")]
+    pub cookie_path: String,
+
+    #[clap(long, env = "OAUTH_PROXY_COOKIE_SECURE")]
+    pub cookie_secure: bool,
+
+    #[clap(long, env = "OAUTH_PROXY_COOKIE_DOMAIN")]
+    pub cookie_domain: Option<String>,
 }
