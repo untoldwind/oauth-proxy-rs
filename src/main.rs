@@ -29,7 +29,7 @@ async fn main() -> anyhow::Result<()> {
         http_client.clone(),
         opts.client_id.to_string(),
         opts.client_secret.to_string(),
-        None,
+        Some(format!("{}/oauth/callback", opts.external_url)),
         reqwest::Url::parse(&opts.issuer)?,
     )
     .await?;
@@ -43,6 +43,8 @@ async fn main() -> anyhow::Result<()> {
         backend_url,
         permit_login: opts.permit_login,
         login_cookie: opts.login_cookie,
+        auth_cookie: opts.auth_cookie,
+        refresh_cookie: opts.refresh_cookie,
     })
     .await;
 

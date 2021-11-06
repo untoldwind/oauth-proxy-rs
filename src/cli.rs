@@ -24,6 +24,9 @@ pub struct Opts {
     #[clap(long, default_value = "0.0.0.0:8080", env = "OAUTH_PROXY_BIND_ADDRESS")]
     pub bind_address: String,
 
+    #[clap(long, default_value = "http://localhost:8080", env = "OAUTH_PROXY_EXTERNAL_URL")]
+    pub external_url: String,
+
     #[clap(long, env = "OAUTH_PROXY_BACKEND")]
     pub backend: String,
 
