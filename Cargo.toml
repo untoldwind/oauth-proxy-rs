@@ -22,6 +22,7 @@ chrono = "0"
 cookie = "0"
 time = "0.2"
 serde = "1"
+openssl = { version = "0", features = ["vendored"] }
 
 [profile.release]
 opt-level = 3
