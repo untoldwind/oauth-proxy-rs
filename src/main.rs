@@ -1,7 +1,7 @@
 mod cli;
 mod server;
 
-use std::{net::ToSocketAddrs, sync::Arc};
+use std::net::ToSocketAddrs;
 
 use anyhow::Context;
 use clap::Parser;
@@ -21,21 +21,30 @@ async fn main() -> anyhow::Result<()> {
         .context("invalid bind address")?
         .into_iter()
         .next()
-        .ok_or(anyhow::anyhow!("Invalid bind_addr"))?;
+        .ok_or_else(|| anyhow::anyhow!("Invalid bind_addr"))?;
+    let backend_url = reqwest::Url::parse(&opts.backend)?;
 
-    let openid_client = Arc::new(
-        DiscoveredClient::discover(
-            opts.client_id.to_string(),
-            opts.client_secret.to_string(),
-            None,
-            reqwest::Url::parse(&opts.issuer)?,
-        )
-        .await?,
-    );
+    let http_client = reqwest::Client::builder().build()?;
+    let openid_client = DiscoveredClient::discover_with_client(
+        http_client.clone(),
+        opts.client_id.to_string(),
+        opts.client_secret.to_string(),
+        None,
+        reqwest::Url::parse(&opts.issuer)?,
+    )
+    .await?;
 
     debug!("Openid client: {:?}", openid_client);
 
-    server::run_server(bind_addr).await;
+    server::run_server(server::Settings {
+        bind_addr,
+        http_client,
+        openid_client,
+        backend_url,
+        permit_login: opts.permit_login,
+        login_cookie: opts.login_cookie,
+    })
+    .await;
 
     Ok(())
 }
