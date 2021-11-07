@@ -40,4 +40,4 @@ jobs:
       with:
         context: .
         push: true
-        tags: untoldwind/jenkins-kube:${{ env.TAG }}
+        tags: untoldwind/oauth-proxy-rs:${{ env.TAG }}
