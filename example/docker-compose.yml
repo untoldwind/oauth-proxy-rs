@@ -13,3 +13,18 @@ services:
       - 8180:8080
     volumes:
     - ./keycloak:/keycloak
+
+  oauth-proxy:
+    image: untoldwind/oauth-proxy-rs:0.1.0
+    restart: always
+    environment:
+      OAUTH_PROXY_CLIENT_ID: oauth-proxy-rs
+      OAUTH_PROXY_CLIENT_SECRET: b2c2fd70-b0f8-49b8-8b32-c04e3165e93e
+      OAUTH_PROXY_ISSUER: http://172.17.0.1:8180/auth/realms/demo
+      OAUTH_PROXY_BACKEND: http://backend:80
+      OAUTH_PROXY_PERMIT_LOGIN: 1
+      OAUTH_PROXY_COOKIE_SECRET: "any string will do just do not share with the outside world"
+    ports:
+      - 8080:8080
+
+ 
