@@ -1,0 +1,17 @@
+name: Build
+on: [push, pull_request]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - name: Check formatting
+      run: cargo fmt -- --check
+    - name: Check clippy
+      run: cargo clippy -- -Dwarnings
+    - name: Build musl
+      uses: docker://emk/rust-musl-builder:latest
+      with:
+        args: cargo build --release
+    - name: Check outcome
+      run: ls -R
