@@ -21,9 +21,7 @@ pub struct Settings {
     pub cookie_domain: Option<String>,
 }
 
-impl Settings {
-    
-}
+impl Settings {}
 
 pub async fn run_server(settings: Settings) {
     let bind_addr = settings.bind_addr;

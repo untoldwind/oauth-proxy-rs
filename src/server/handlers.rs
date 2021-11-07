@@ -23,15 +23,16 @@ pub async fn oauth_callback(
         warn!("Invalid login attempt (login not permitted)");
         return Err(warp::reject());
     }
-    let (expected_state, redirect_url, origin) = match validate_login_cookie(settings.clone(), &headers) {
-        Some(validated) => validated,
-        None => {
-            error!("Login cookie validation failed");
-            return Ok(Response::builder()
-                .status(StatusCode::UNAUTHORIZED)
-                .body("Unauthorized"));
-        }
-    };
+    let (expected_state, redirect_url, origin) =
+        match validate_login_cookie(settings.clone(), &headers) {
+            Some(validated) => validated,
+            None => {
+                error!("Login cookie validation failed");
+                return Ok(Response::builder()
+                    .status(StatusCode::UNAUTHORIZED)
+                    .body("Unauthorized"));
+            }
+        };
     if login_query.state != Some(expected_state) {
         error!("Login state mismatch");
         return Ok(Response::builder()
@@ -43,10 +44,7 @@ pub async fn oauth_callback(
 
     openid_client.redirect_uri = Some(redirect_url);
 
-    match openid_client
-        .request_token(&login_query.code)
-        .await
-    {
+    match openid_client.request_token(&login_query.code).await {
         Ok(bearer) => {
             let mut response = Response::builder()
                 .status(StatusCode::MOVED_PERMANENTLY)
@@ -88,10 +86,19 @@ fn login_redirect(
     origin: Url,
 ) -> warp::http::Result<warp::http::Response<warp::hyper::Body>> {
     let state = uuid::Uuid::new_v4().to_string();
-    let redirect_url = if let Some(port) = origin.port() { 
-        format!("{}://{}:{}/oauth/callback", origin.scheme(), origin.host_str().unwrap_or("localhost"), port)
+    let redirect_url = if let Some(port) = origin.port() {
+        format!(
+            "{}://{}:{}/oauth/callback",
+            origin.scheme(),
+            origin.host_str().unwrap_or("localhost"),
+            port
+        )
     } else {
-        format!("{}://{}/oauth/callback", origin.scheme(), origin.host_str().unwrap_or("localhost"))
+        format!(
+            "{}://{}/oauth/callback",
+            origin.scheme(),
+            origin.host_str().unwrap_or("localhost")
+        )
     };
 
     let mut payload = BytesMut::new();
@@ -101,7 +108,7 @@ fn login_redirect(
     payload.put_u8(0);
     payload.put(origin.to_string().as_bytes());
     let hmac = hmac_sha256::HMAC::mac(&payload, settings.cookie_secret.as_bytes());
-    
+
     let mut login_cookie = cookie::Cookie::build(
         &settings.login_cookie,
         format!(
@@ -127,7 +134,6 @@ fn login_redirect(
         ..Default::default()
     });
 
-
     return Response::builder()
         .status(StatusCode::FOUND)
         .header(header::LOCATION, login_url.as_str())
@@ -135,7 +141,10 @@ fn login_redirect(
         .body(warp::hyper::Body::empty());
 }
 
-fn validate_login_cookie(settings: Arc<Settings>, headers: &HeaderMap) -> Option<(String, String, String)> {
+fn validate_login_cookie(
+    settings: Arc<Settings>,
+    headers: &HeaderMap,
+) -> Option<(String, String, String)> {
     let login_cookie = headers
         .typed_get::<headers::Cookie>()
         .and_then(|cookie| cookie.get(&settings.login_cookie).map(str::to_string))?;
