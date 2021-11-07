@@ -10,7 +10,7 @@ jobs:
     - name: Check clippy
       run: cargo clippy -- -Dwarnings
     - name: Build musl
-      uses: docker://emk/rust-musl-builder:latest
+      uses: docker://ekidd/rust-musl-builder:stable
       with:
         args: cargo build --release
     - name: Check outcome
