@@ -28,6 +28,7 @@ fn oauth_callback(
         .and(warp::get())
         .and(with_settings(settings))
         .and(warp::query::<LoginQuery>())
+        .and(warp::header::headers_cloned())
         .and_then(handlers::oauth_callback)
 }
 

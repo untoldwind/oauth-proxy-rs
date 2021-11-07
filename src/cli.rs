@@ -3,13 +3,13 @@ use clap::Parser;
 #[derive(Parser, Debug)]
 #[clap(name = "oauth-proxy-rs")]
 pub struct Opts {
-    #[clap(long)]
+    #[clap(long, env = "OAUTH_PROXY_DEBUG")]
     pub debug: bool,
 
-    #[clap(long)]
+    #[clap(long, env = "OAUTH_PROXY_JSON_LOG")]
     pub json_log: bool,
 
-    #[clap(long)]
+    #[clap(long, env = "OAUTH_PROXY_PERMIT_LOGIN")]
     pub permit_login: bool,
 
     #[clap(long, env = "OAUTH_PROXY_CLIENT_ID")]

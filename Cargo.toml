@@ -10,7 +10,6 @@ tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 warp = { version = "0", default-features = false }
 reqwest = { version = "0", default-features = false, features = ["stream"]}
 clap = "3.0.0-beta.5"
-jwt-simple = "0"
 openid = "0"
 log = "0"
 tracing = "0"
@@ -22,10 +21,16 @@ chrono = "0"
 cookie = "0"
 time = "0.2"
 serde = "1"
-openssl = { version = "0", features = ["vendored"] }
+hmac-sha256 = { version = "1", features = ["traits"] }
+digest = "0"
+uuid = { version = "0", features = ["v4"] }
+base64 = "0"
 
 [profile.release]
 opt-level = 3
 debug = false
 lto = true
 panic = "abort"
+
+[target.'x86_64-unknown-linux-musl'.dependencies]
+openssl-sys = { version = "0", features = ["vendored"] }

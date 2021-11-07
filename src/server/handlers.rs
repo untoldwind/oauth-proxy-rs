@@ -1,4 +1,5 @@
 use super::{api::LoginQuery, Settings};
+use bytes::{BufMut, BytesMut};
 use chrono::{DateTime, NaiveDateTime, Utc};
 use futures::TryStreamExt;
 use headers::HeaderMapExt;
@@ -16,11 +17,28 @@ struct Token {
 pub async fn oauth_callback(
     settings: Arc<Settings>,
     login_query: LoginQuery,
+    headers: HeaderMap,
 ) -> Result<impl warp::Reply, warp::Rejection> {
     if !settings.permit_login {
         warn!("Invalid login attempt (login not permitted)");
         return Err(warp::reject());
     }
+    let (expected_state, origin) = match validate_login_cookie(settings.clone(), &headers) {
+        Some(validated) => validated,
+        None => {
+            error!("Login cookie validation failed");
+            return Ok(Response::builder()
+                .status(StatusCode::UNAUTHORIZED)
+                .body("Unauthorized"));
+        }
+    };
+    if login_query.state != Some(expected_state) {
+        error!("Login state mismatch");
+        return Ok(Response::builder()
+            .status(StatusCode::UNAUTHORIZED)
+            .body("Unauthorized"));
+    }
+
     match settings
         .openid_client
         .request_token(&login_query.code)
@@ -29,16 +47,26 @@ pub async fn oauth_callback(
         Ok(bearer) => {
             let mut response = Response::builder()
                 .status(StatusCode::MOVED_PERMANENTLY)
-                .header(header::LOCATION, "/");
+                .header(header::LOCATION, origin);
             if let Some(refresh_token) = bearer.refresh_token {
                 response = add_refresh_cookie(settings.clone(), &refresh_token, response);
             }
             response = add_auth_cookie(
-                settings,
+                settings.clone(),
                 bearer.id_token.unwrap_or(bearer.access_token),
                 bearer.expires,
                 response,
             );
+
+            let mut login_cookie = cookie::Cookie::build(&settings.login_cookie, "")
+                .http_only(true)
+                .path(&settings.cookie_path)
+                .secure(settings.cookie_secure)
+                .max_age(time::Duration::seconds(0));
+            if let Some(cookie_domain) = &settings.cookie_domain {
+                login_cookie = login_cookie.domain(cookie_domain);
+            }
+            response = response.header(header::SET_COOKIE, login_cookie.finish().to_string());
 
             Ok(response.body(""))
         }
@@ -50,6 +78,63 @@ pub async fn oauth_callback(
                 .body("Unauthorized"))
         }
     }
+}
+
+fn login_redirect(
+    settings: Arc<Settings>,
+    origin: &str,
+) -> warp::http::Result<warp::http::Response<warp::hyper::Body>> {
+    let state = uuid::Uuid::new_v4().to_string();
+    let mut payload = BytesMut::new();
+    payload.put(state.as_bytes());
+    payload.put_u8(0);
+    payload.put(origin.as_bytes());
+    let hmac = hmac_sha256::HMAC::mac(&payload, settings.cookie_secret.as_bytes());
+    let login_url = settings.openid_client.auth_url(&openid::Options {
+        state: Some(state),
+        scope: Some("openid email profile".to_string()),
+        ..Default::default()
+    });
+
+    let mut login_cookie = cookie::Cookie::build(
+        &settings.login_cookie,
+        format!(
+            "{}.{}",
+            base64::encode_config(payload, base64::URL_SAFE_NO_PAD),
+            base64::encode_config(hmac, base64::URL_SAFE_NO_PAD)
+        ),
+    )
+    .http_only(true)
+    .path(&settings.cookie_path)
+    .secure(settings.cookie_secure);
+    if let Some(cookie_domain) = &settings.cookie_domain {
+        login_cookie = login_cookie.domain(cookie_domain);
+    }
+
+    return Response::builder()
+        .status(StatusCode::FOUND)
+        .header(header::LOCATION, login_url.as_str())
+        .header(header::SET_COOKIE, login_cookie.finish().to_string())
+        .body(warp::hyper::Body::empty());
+}
+
+fn validate_login_cookie(settings: Arc<Settings>, headers: &HeaderMap) -> Option<(String, String)> {
+    let login_cookie = headers
+        .typed_get::<headers::Cookie>()
+        .and_then(|cookie| cookie.get(&settings.login_cookie).map(str::to_string))?;
+    let mut parts = login_cookie.split('.');
+    let payload = base64::decode_config(parts.next()?, base64::URL_SAFE_NO_PAD).ok()?;
+    let signature = base64::decode_config(parts.next()?, base64::URL_SAFE_NO_PAD).ok()?;
+    let hmac = hmac_sha256::HMAC::mac(&payload, settings.cookie_secret.as_bytes());
+
+    // There is no need to be subtle here, all the information is already exposed
+    if &hmac[..] != signature.as_slice() {
+        return None;
+    }
+    let mut payload_parts = payload.split(|b| *b == 0u8);
+    let state = String::from_utf8(payload_parts.next()?.to_vec()).ok()?;
+    let origin = String::from_utf8(payload_parts.next()?.to_vec()).ok()?;
+    return Some((state, origin));
 }
 
 pub async fn proxy_request<S, B, E>(
@@ -79,14 +164,7 @@ where
     let token = match find_or_refresh_token(settings.clone(), &headers).await {
         Some(token) => token,
         None if settings.permit_login => {
-            let login_url = settings.openid_client.auth_url(&openid::Options {
-                scope: Some("openid email profile".to_string()),
-                ..Default::default()
-            });
-            return Ok(Response::builder()
-                .status(StatusCode::FOUND)
-                .header(header::LOCATION, login_url.as_str())
-                .body(warp::hyper::Body::empty()));
+            return Ok(login_redirect(settings.clone(), url.path()));
         }
         None => {
             return Ok(Response::builder()
@@ -139,7 +217,10 @@ async fn refresh_token(settings: Arc<Settings>, headers: &HeaderMap) -> Option<T
         .and_then(|cookie| cookie.get(&settings.refresh_cookie).map(str::to_string))
     {
         Some(token) => token,
-        None => return None,
+        None => {
+            warn!("No refresh token present");
+            return None;
+        }
     };
     match settings
         .openid_client

@@ -9,6 +9,7 @@ use log::debug;
 use openid::DiscoveredClient;
 use tracing::Level;
 use tracing_subscriber::util::SubscriberInitExt;
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let opts = cli::Opts::parse();
@@ -42,6 +43,7 @@ async fn main() -> anyhow::Result<()> {
         openid_client,
         backend_url,
         permit_login: opts.permit_login,
+        cookie_secret: opts.cookie_secret,
         login_cookie: opts.login_cookie,
         auth_cookie: opts.auth_cookie,
         refresh_cookie: opts.refresh_cookie,
