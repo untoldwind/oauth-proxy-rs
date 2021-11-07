@@ -4,7 +4,7 @@ use chrono::{DateTime, NaiveDateTime, Utc};
 use futures::TryStreamExt;
 use headers::HeaderMapExt;
 use log::{error, warn};
-use reqwest::{header::HeaderMap, Method};
+use reqwest::{header::HeaderMap, Method, Url};
 use std::{convert::Infallible, sync::Arc};
 use warp::http::{header, response, Response, StatusCode};
 
@@ -82,13 +82,13 @@ pub async fn oauth_callback(
 
 fn login_redirect(
     settings: Arc<Settings>,
-    origin: &str,
+    origin: Url,
 ) -> warp::http::Result<warp::http::Response<warp::hyper::Body>> {
     let state = uuid::Uuid::new_v4().to_string();
     let mut payload = BytesMut::new();
     payload.put(state.as_bytes());
     payload.put_u8(0);
-    payload.put(origin.as_bytes());
+    payload.put(origin.to_string().as_bytes());
     let hmac = hmac_sha256::HMAC::mac(&payload, settings.cookie_secret.as_bytes());
     let login_url = settings.openid_client.auth_url(&openid::Options {
         state: Some(state),
@@ -134,14 +134,14 @@ fn validate_login_cookie(settings: Arc<Settings>, headers: &HeaderMap) -> Option
     let mut payload_parts = payload.split(|b| *b == 0u8);
     let state = String::from_utf8(payload_parts.next()?.to_vec()).ok()?;
     let origin = String::from_utf8(payload_parts.next()?.to_vec()).ok()?;
-    return Some((state, origin));
+
+    Some((state, origin))
 }
 
 pub async fn proxy_request<S, B, E>(
     settings: Arc<Settings>,
     method: Method,
-    path: warp::path::FullPath,
-    query: Option<String>,
+    mut url: Url,
     headers: HeaderMap,
     body: S,
 ) -> Result<impl warp::Reply, Infallible>
@@ -150,21 +150,10 @@ where
     B: bytes::Buf,
     E: std::error::Error + Send + Sync + 'static,
 {
-    let mut url = match settings.backend_url.join(path.as_str()) {
-        Ok(url) => url,
-        Err(err) => {
-            error!("Invalid proxy url: {}", err);
-            return Ok(Response::builder()
-                .status(StatusCode::INTERNAL_SERVER_ERROR)
-                .body(warp::hyper::Body::from("Invalid url")));
-        }
-    };
-    url.set_query(query.as_deref());
-
     let token = match find_or_refresh_token(settings.clone(), &headers).await {
         Some(token) => token,
         None if settings.permit_login => {
-            return Ok(login_redirect(settings.clone(), url.path()));
+            return Ok(login_redirect(settings.clone(), url));
         }
         None => {
             return Ok(Response::builder()
@@ -172,6 +161,11 @@ where
                 .body(warp::hyper::Body::from("Unauthorized")))
         }
     };
+
+    url.set_scheme(settings.backend_url.scheme()).ok();
+    url.set_host(settings.backend_url.host_str()).ok();
+    url.set_port(settings.backend_url.port()).ok();
+    url.set_username(settings.backend_url.username()).ok();
 
     let backend_response = settings
         .http_client
