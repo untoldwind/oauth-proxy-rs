@@ -30,7 +30,7 @@ async fn main() -> anyhow::Result<()> {
         http_client.clone(),
         opts.client_id.to_string(),
         opts.client_secret.to_string(),
-        Some(format!("{}/oauth/callback", opts.external_url)),
+        None,
         reqwest::Url::parse(&opts.issuer)?,
     )
     .await?;

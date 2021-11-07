@@ -3,7 +3,7 @@ use bytes::{BufMut, BytesMut};
 use chrono::{DateTime, NaiveDateTime, Utc};
 use futures::TryStreamExt;
 use headers::HeaderMapExt;
-use log::{error, warn};
+use log::{error, info, warn};
 use reqwest::{header::HeaderMap, Method, Url};
 use std::{convert::Infallible, sync::Arc};
 use warp::http::{header, response, Response, StatusCode};
@@ -23,7 +23,7 @@ pub async fn oauth_callback(
         warn!("Invalid login attempt (login not permitted)");
         return Err(warp::reject());
     }
-    let (expected_state, origin) = match validate_login_cookie(settings.clone(), &headers) {
+    let (expected_state, redirect_url, origin) = match validate_login_cookie(settings.clone(), &headers) {
         Some(validated) => validated,
         None => {
             error!("Login cookie validation failed");
@@ -39,8 +39,11 @@ pub async fn oauth_callback(
             .body("Unauthorized"));
     }
 
-    match settings
-        .openid_client
+    let mut openid_client = settings.openid_client.clone();
+
+    openid_client.redirect_uri = Some(redirect_url);
+
+    match openid_client
         .request_token(&login_query.code)
         .await
     {
@@ -85,17 +88,20 @@ fn login_redirect(
     origin: Url,
 ) -> warp::http::Result<warp::http::Response<warp::hyper::Body>> {
     let state = uuid::Uuid::new_v4().to_string();
+    let redirect_url = if let Some(port) = origin.port() { 
+        format!("{}://{}:{}/oauth/callback", origin.scheme(), origin.host_str().unwrap_or("localhost"), port)
+    } else {
+        format!("{}://{}/oauth/callback", origin.scheme(), origin.host_str().unwrap_or("localhost"))
+    };
+
     let mut payload = BytesMut::new();
     payload.put(state.as_bytes());
     payload.put_u8(0);
+    payload.put(redirect_url.as_bytes());
+    payload.put_u8(0);
     payload.put(origin.to_string().as_bytes());
     let hmac = hmac_sha256::HMAC::mac(&payload, settings.cookie_secret.as_bytes());
-    let login_url = settings.openid_client.auth_url(&openid::Options {
-        state: Some(state),
-        scope: Some("openid email profile".to_string()),
-        ..Default::default()
-    });
-
+    
     let mut login_cookie = cookie::Cookie::build(
         &settings.login_cookie,
         format!(
@@ -111,6 +117,17 @@ fn login_redirect(
         login_cookie = login_cookie.domain(cookie_domain);
     }
 
+    let mut openid_client = settings.openid_client.clone();
+
+    openid_client.redirect_uri = Some(redirect_url);
+
+    let login_url = openid_client.auth_url(&openid::Options {
+        state: Some(state),
+        scope: Some("openid email profile".to_string()),
+        ..Default::default()
+    });
+
+
     return Response::builder()
         .status(StatusCode::FOUND)
         .header(header::LOCATION, login_url.as_str())
@@ -118,7 +135,7 @@ fn login_redirect(
         .body(warp::hyper::Body::empty());
 }
 
-fn validate_login_cookie(settings: Arc<Settings>, headers: &HeaderMap) -> Option<(String, String)> {
+fn validate_login_cookie(settings: Arc<Settings>, headers: &HeaderMap) -> Option<(String, String, String)> {
     let login_cookie = headers
         .typed_get::<headers::Cookie>()
         .and_then(|cookie| cookie.get(&settings.login_cookie).map(str::to_string))?;
@@ -133,9 +150,10 @@ fn validate_login_cookie(settings: Arc<Settings>, headers: &HeaderMap) -> Option
     }
     let mut payload_parts = payload.split(|b| *b == 0u8);
     let state = String::from_utf8(payload_parts.next()?.to_vec()).ok()?;
+    let redirect_url = String::from_utf8(payload_parts.next()?.to_vec()).ok()?;
     let origin = String::from_utf8(payload_parts.next()?.to_vec()).ok()?;
 
-    Some((state, origin))
+    Some((state, redirect_url, origin))
 }
 
 pub async fn proxy_request<S, B, E>(
@@ -178,6 +196,7 @@ where
         .send()
         .await
         .unwrap();
+
     Ok(mangle_proxy_response_headers(
         settings,
         backend_response.headers(),
@@ -212,10 +231,11 @@ async fn refresh_token(settings: Arc<Settings>, headers: &HeaderMap) -> Option<T
     {
         Some(token) => token,
         None => {
-            warn!("No refresh token present");
+            info!("No refresh token present");
             return None;
         }
     };
+    info!("Trying token refresh");
     match settings
         .openid_client
         .refresh_token(
