@@ -4,6 +4,7 @@ use chrono::{DateTime, NaiveDateTime, Utc};
 use futures::TryStreamExt;
 use headers::HeaderMapExt;
 use log::{error, info, warn};
+use openid::Claims;
 use reqwest::{header::HeaderMap, Method, Url};
 use std::{convert::Infallible, sync::Arc};
 use warp::http::{header, response, Response, StatusCode};
@@ -277,7 +278,15 @@ fn parse_and_validate_token(settings: Arc<Settings>, raw: String) -> Option<Toke
         warn!("Invalid id token, trying refresh: {}", err);
         return None;
     }
-    if let Err(err) = settings.openid_client.validate_token(&token, None, None) {
+    if let Err(err) = settings.openid_client.validate_token(
+        &token,
+        token
+            .payload()
+            .ok()
+            .and_then(|p| p.nonce())
+            .map(String::as_str),
+        None,
+    ) {
         warn!("Token validation failed, trying refresh: {}", err);
         return None;
     }
