@@ -16,6 +16,7 @@ async fn main() -> anyhow::Result<()> {
 
     init_logging(&opts)?;
 
+    // Parse/validate the given bind address.
     let bind_addr = opts
         .bind_address
         .to_socket_addrs()
@@ -23,8 +24,13 @@ async fn main() -> anyhow::Result<()> {
         .into_iter()
         .next()
         .ok_or_else(|| anyhow::anyhow!("Invalid bind_addr"))?;
+    // Parse/validate the backend url
     let backend_url = reqwest::Url::parse(&opts.backend)?;
 
+    // Initialize the openid client.
+    // This will implicitly perform an openid discovery, i.e. the
+    // proxy will not startup if the openid provider is not available
+    // or misconfigured.
     let openid_client = DiscoveredClient::discover(
         opts.client_id.to_string(),
         opts.client_secret.to_string(),
@@ -32,6 +38,7 @@ async fn main() -> anyhow::Result<()> {
         reqwest::Url::parse(&opts.issuer)?,
     )
     .await?;
+    // Configure http client used to forward requests to the backend
     let http_client = reqwest::Client::builder()
         .redirect(reqwest::redirect::Policy::none())
         .build()?;

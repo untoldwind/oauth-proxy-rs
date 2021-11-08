@@ -1,5 +1,6 @@
 use clap::Parser;
 
+// Collection of all command-line/environment variables.
 #[derive(Parser, Debug)]
 #[clap(name = "oauth-proxy-rs", version = clap::crate_version!())]
 pub struct Opts {

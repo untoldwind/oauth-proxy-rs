@@ -5,6 +5,7 @@ use warp::Filter;
 mod api;
 mod handlers;
 
+// Collection of all server settings needed by the request handlers.
 #[derive(Debug)]
 pub struct Settings {
     pub bind_addr: SocketAddr,
@@ -22,8 +23,7 @@ pub struct Settings {
     pub cookie_domain: Option<String>,
 }
 
-impl Settings {}
-
+// Run the server.
 pub async fn run_server(settings: Settings) {
     let bind_addr = settings.bind_addr;
     let routes = api::routes(settings).with(warp::log("server"));

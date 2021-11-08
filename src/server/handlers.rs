@@ -9,17 +9,21 @@ use reqwest::{header::HeaderMap, Method, Url};
 use std::{convert::Infallible, sync::Arc};
 use warp::http::{header, response, Response, StatusCode};
 
+// Boiled down version of the openid::Bearer struct, only
+// containing the tokens relevant to the proxy.
 struct Token {
     raw: String,
     expires: Option<DateTime<Utc>>,
     raw_refresh: Option<String>,
 }
 
+// Handle an oauth callback, i.e. complete the openid login flow.
 pub async fn oauth_callback(
     settings: Arc<Settings>,
     login_query: LoginQuery,
     headers: HeaderMap,
 ) -> Result<impl warp::Reply, warp::Rejection> {
+    // Verify that login is allowed and this is a legitimate reply from the openid provider.
     if !settings.permit_login {
         warn!("Invalid login attempt (login not permitted)");
         return Err(warp::reject());
@@ -41,12 +45,16 @@ pub async fn oauth_callback(
             .body("Unauthorized"));
     }
 
+    // Workaround: The redirect_uri might not be a constant as it might
+    // depend on the X-Forwarded-Host/X-Forwarded-Proto headers
     let mut openid_client = settings.openid_client.clone();
 
     openid_client.redirect_uri = Some(redirect_url);
 
+    // Exchange the authcode to an actual set of tokens
     match openid_client.request_token(&login_query.code).await {
         Ok(bearer) => {
+            // If successful: Store the tokens in their corresponding cookies.
             let mut response = Response::builder()
                 .status(StatusCode::MOVED_PERMANENTLY)
                 .header(header::LOCATION, origin);
@@ -82,11 +90,13 @@ pub async fn oauth_callback(
     }
 }
 
+// Construct a response to redirect to the login-page of the openid-provider.
 fn login_redirect(
     settings: Arc<Settings>,
     origin: Url,
 ) -> warp::http::Result<warp::http::Response<warp::hyper::Body>> {
     let state = uuid::Uuid::new_v4().to_string();
+    // Construct redirect_uri based on the external hostname (that might come from X-Forwarded-Host)
     let redirect_url = if let Some(port) = origin.port() {
         format!(
             "{}://{}:{}/oauth/callback",
@@ -102,6 +112,7 @@ fn login_redirect(
         )
     };
 
+    // Construct a hmac signed cookie so that the oauth callback can check if the request if legit.
     let mut payload = BytesMut::new();
     payload.put(state.as_bytes());
     payload.put_u8(0);
@@ -125,10 +136,12 @@ fn login_redirect(
         login_cookie = login_cookie.domain(cookie_domain);
     }
 
+    // Workaround: redirect_uri might not be constant
     let mut openid_client = settings.openid_client.clone();
 
     openid_client.redirect_uri = Some(redirect_url);
 
+    // Actually build the entire uri to redirect to.
     let login_url = openid_client.auth_url(&openid::Options {
         state: Some(state),
         scope: Some(settings.scopes.clone()),
@@ -142,6 +155,8 @@ fn login_redirect(
         .body(warp::hyper::Body::empty());
 }
 
+// Validate the contents of the temporary cookie used during the login flow
+// (i.e. that is constructed in login_redirect and consumed in oauth_callback)
 fn validate_login_cookie(
     settings: Arc<Settings>,
     headers: &HeaderMap,
@@ -166,6 +181,7 @@ fn validate_login_cookie(
     Some((state, redirect_url, origin))
 }
 
+// Handle a request forward/proxy.
 pub async fn proxy_request<S, B, E>(
     settings: Arc<Settings>,
     method: Method,
@@ -178,6 +194,7 @@ where
     B: bytes::Buf,
     E: std::error::Error + Send + Sync + 'static,
 {
+    // Check if the request is authorized and maybe redirect to login-page if login is permitted.
     let token = match find_or_refresh_token(settings.clone(), &headers).await {
         Some(token) => token,
         None if settings.permit_login => {
@@ -190,11 +207,13 @@ where
         }
     };
 
+    // Replace scheme/host/port/username with those of the backend
     url.set_scheme(settings.backend_url.scheme()).ok();
     url.set_host(settings.backend_url.host_str()).ok();
     url.set_port(settings.backend_url.port()).ok();
     url.set_username(settings.backend_url.username()).ok();
 
+    // Execute the request on the backend and return the result with as little change as possible.
     let backend_response = settings
         .http_client
         .request(method, url)
