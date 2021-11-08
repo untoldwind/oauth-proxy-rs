@@ -130,7 +130,7 @@ fn login_redirect(
 
     let login_url = openid_client.auth_url(&openid::Options {
         state: Some(state),
-        scope: Some("openid email profile".to_string()),
+        scope: Some(settings.scopes.clone()),
         ..Default::default()
     });
 

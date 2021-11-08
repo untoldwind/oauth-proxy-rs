@@ -12,6 +12,7 @@ pub struct Settings {
     pub openid_client: openid::Client,
     pub backend_url: reqwest::Url,
     pub permit_login: bool,
+    pub scopes: String,
     pub cookie_secret: String,
     pub login_cookie: String,
     pub auth_cookie: String,

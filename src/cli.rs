@@ -47,6 +47,14 @@ pub struct Opts {
 
     #[clap(
         long,
+        env = "OAUTH_PROXY_SCOPES",
+        default_value = "openid email profile",
+        about = "Scopes to request on login"
+    )]
+    pub scopes: String,
+
+    #[clap(
+        long,
         default_value = "0.0.0.0:8080",
         env = "OAUTH_PROXY_BIND_ADDRESS",
         about = "Socket address to bind to"

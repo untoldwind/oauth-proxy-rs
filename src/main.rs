@@ -43,6 +43,7 @@ async fn main() -> anyhow::Result<()> {
         openid_client,
         backend_url,
         permit_login: opts.permit_login,
+        scopes: opts.scopes,
         cookie_secret: opts.cookie_secret,
         login_cookie: opts.login_cookie,
         auth_cookie: opts.auth_cookie,
