@@ -25,15 +25,16 @@ async fn main() -> anyhow::Result<()> {
         .ok_or_else(|| anyhow::anyhow!("Invalid bind_addr"))?;
     let backend_url = reqwest::Url::parse(&opts.backend)?;
 
-    let http_client = reqwest::Client::builder().build()?;
-    let openid_client = DiscoveredClient::discover_with_client(
-        http_client.clone(),
+    let openid_client = DiscoveredClient::discover(
         opts.client_id.to_string(),
         opts.client_secret.to_string(),
         None,
         reqwest::Url::parse(&opts.issuer)?,
     )
     .await?;
+    let http_client = reqwest::Client::builder()
+        .redirect(reqwest::redirect::Policy::none())
+        .build()?;
 
     debug!("Openid client: {:?}", openid_client);
 
