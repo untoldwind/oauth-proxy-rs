@@ -75,16 +75,16 @@ fn external_url() -> impl Filter<Extract = (Url,), Error = warp::Rejection> + Cl
                     .as_deref()
                     .or_else(|| maybe_host.as_ref().map(|a| a.as_str()))
                     .unwrap_or("localhost");
-                let url = if let Some(query) = maybe_query {
-                    format!("{}://{}{}?{}", scheme, host, path.as_str(), query)
-                } else {
-                    format!("{}://{}{}", scheme, host, path.as_str())
-                };
-
-                future::ready(Url::parse(&url).map_err(|err| {
-                    error!("Invalid url: {}", err);
-                    warp::reject()
-                }))
+                match Url::parse(&format!("{}://{}{}", scheme, host, path.as_str())) {
+                    Ok(mut url) => {
+                        url.set_query(maybe_query.as_deref());
+                        future::ok(url)
+                    }
+                    Err(err) => {
+                        error!("Invalid url: {}", err);
+                        future::err(warp::reject())
+                    }
+                }
             },
         )
 }
