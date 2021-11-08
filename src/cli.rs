@@ -95,7 +95,7 @@ pub struct Opts {
     #[clap(
         long,
         default_value = "OAUTH_PROXY_REFRESH",
-        env = "OAUTH_PROXY_AUTH_REFRESH",
+        env = "OAUTH_PROXY_REFRESH_COOKIE",
         about = "Name of the cookie to store the refresh token"
     )]
     pub refresh_cookie: String,
