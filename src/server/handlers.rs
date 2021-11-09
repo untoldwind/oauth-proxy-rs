@@ -237,6 +237,8 @@ where
     )))
 }
 
+// Find and validate the id token in the auth cookie or in the authorization header.
+// If token does not exists or has expired, try a refresh to get a new one
 async fn find_or_refresh_token(settings: Arc<Settings>, headers: &HeaderMap) -> Option<Token> {
     let maybe_token = headers
         .typed_get::<headers::Authorization<headers::authorization::Bearer>>()
@@ -253,6 +255,7 @@ async fn find_or_refresh_token(settings: Arc<Settings>, headers: &HeaderMap) -> 
     }
 }
 
+// Try to get a new id token with the refresh token.
 async fn refresh_token(settings: Arc<Settings>, headers: &HeaderMap) -> Option<Token> {
     let refresh_token = match headers
         .typed_get::<headers::Cookie>()
@@ -291,6 +294,7 @@ async fn refresh_token(settings: Arc<Settings>, headers: &HeaderMap) -> Option<T
     }
 }
 
+// Validate an id token.
 fn parse_and_validate_token(settings: Arc<Settings>, raw: String) -> Option<Token> {
     let mut token = openid::IdToken::new_encoded(&raw);
     if let Err(err) = settings.openid_client.decode_token(&mut token) {
@@ -322,6 +326,8 @@ fn parse_and_validate_token(settings: Arc<Settings>, raw: String) -> Option<Toke
     })
 }
 
+// Mangle the http request headers (proxy -> backend), i.e. remove
+// everything that might in get way.
 fn mangle_proxy_request_headers(mut headers: HeaderMap) -> HeaderMap {
     headers.remove(header::AUTHORIZATION);
     headers.remove(header::TRANSFER_ENCODING);
@@ -330,6 +336,8 @@ fn mangle_proxy_request_headers(mut headers: HeaderMap) -> HeaderMap {
     headers
 }
 
+// Mangle the http response headers (proxy <- backend), i.e. remove
+// everything that might get in the way.
 fn mangle_proxy_response_headers(
     settings: Arc<Settings>,
     headers: &HeaderMap,
@@ -350,6 +358,7 @@ fn mangle_proxy_response_headers(
     response
 }
 
+// Add a new refresh cookie to the response
 fn add_refresh_cookie(
     settings: Arc<Settings>,
     refresh_token: &str,
@@ -365,6 +374,7 @@ fn add_refresh_cookie(
     response.header(header::SET_COOKIE, refresh_cookie.finish().to_string())
 }
 
+// Add a new auth cookie to the response
 fn add_auth_cookie(
     settings: Arc<Settings>,
     auth_token: String,
