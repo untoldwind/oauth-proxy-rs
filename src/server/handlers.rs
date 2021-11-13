@@ -1,6 +1,6 @@
 use super::{api::LoginQuery, Settings};
 use bytes::{BufMut, BytesMut};
-use chrono::{DateTime, NaiveDateTime, Utc};
+use chrono::{DateTime, TimeZone, Utc};
 use futures::TryStreamExt;
 use headers::HeaderMapExt;
 use log::{error, info, warn};
@@ -318,7 +318,7 @@ fn parse_and_validate_token(settings: Arc<Settings>, raw: String) -> Option<Toke
         .ok()
         .map(|claims| claims.exp)
         .filter(|exp| *exp > 0)
-        .map(|exp| DateTime::from_utc(NaiveDateTime::from_timestamp(exp, 0), Utc));
+        .map(|exp| Utc.timestamp(exp, 0));
     Some(Token {
         raw,
         expires,
