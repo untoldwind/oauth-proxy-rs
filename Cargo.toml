@@ -1,6 +1,6 @@
 [package]
 name = "oauth-proxy-rs"
-version = "0.1.4"
+version = "0.1.5"
 authors = ["Untoldwind <landru@untoldwind.net>"]
 edition = "2018"
 
@@ -30,7 +30,7 @@ base64 = "0"
 opt-level = 3
 debug = false
 lto = true
-panic = "abort"
+# panic = "abort"
 
 [target.'x86_64-unknown-linux-musl'.dependencies]
 openssl-sys = { version = "0", features = ["vendored"] }
