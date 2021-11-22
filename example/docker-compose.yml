@@ -15,7 +15,7 @@ services:
     - ./keycloak:/keycloak
 
   oauth-proxy:
-    image: untoldwind/oauth-proxy-rs:0.1.0
+    image: untoldwind/oauth-proxy-rs:0.1.5
     restart: always
     environment:
       OAUTH_PROXY_CLIENT_ID: oauth-proxy-rs
