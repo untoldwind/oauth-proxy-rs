@@ -21,7 +21,6 @@ async fn main() -> anyhow::Result<()> {
         .bind_address
         .to_socket_addrs()
         .context("invalid bind address")?
-        .into_iter()
         .next()
         .ok_or_else(|| anyhow::anyhow!("Invalid bind_addr"))?;
     // Parse/validate the backend url
