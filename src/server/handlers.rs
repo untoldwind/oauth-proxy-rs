@@ -1,4 +1,5 @@
 use super::{api::LoginQuery, Settings};
+use base64::{engine::general_purpose, Engine as _};
 use bytes::{BufMut, BytesMut};
 use chrono::{DateTime, TimeZone, Utc};
 use futures::TryStreamExt;
@@ -125,8 +126,8 @@ fn login_redirect(
         &settings.login_cookie,
         format!(
             "{}.{}",
-            base64::encode_config(payload, base64::URL_SAFE_NO_PAD),
-            base64::encode_config(hmac, base64::URL_SAFE_NO_PAD)
+            general_purpose::URL_SAFE_NO_PAD.encode(payload),
+            general_purpose::URL_SAFE_NO_PAD.encode(hmac),
         ),
     )
     .http_only(true)
@@ -165,8 +166,12 @@ fn validate_login_cookie(
         .typed_get::<headers::Cookie>()
         .and_then(|cookie| cookie.get(&settings.login_cookie).map(str::to_string))?;
     let mut parts = login_cookie.split('.');
-    let payload = base64::decode_config(parts.next()?, base64::URL_SAFE_NO_PAD).ok()?;
-    let signature = base64::decode_config(parts.next()?, base64::URL_SAFE_NO_PAD).ok()?;
+    let payload = general_purpose::URL_SAFE_NO_PAD
+        .decode(parts.next()?)
+        .ok()?;
+    let signature = general_purpose::URL_SAFE_NO_PAD
+        .decode(parts.next()?)
+        .ok()?;
     let hmac = hmac_sha256::HMAC::mac(&payload, settings.cookie_secret.as_bytes());
 
     // There is no need to be subtle here, all the information is already exposed
@@ -318,7 +323,7 @@ fn parse_and_validate_token(settings: Arc<Settings>, raw: String) -> Option<Toke
         .ok()
         .map(|claims| claims.exp)
         .filter(|exp| *exp > 0)
-        .map(|exp| Utc.timestamp(exp, 0));
+        .map(|exp| Utc.timestamp_opt(exp, 0).unwrap());
     Some(Token {
         raw,
         expires,
