@@ -8,7 +8,7 @@ edition = "2018"
 anyhow = "1"
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 warp = { version = "0", default-features = false }
-reqwest = { version = "0", default-features = false, features = ["stream"]}
+reqwest = { version = "0", default-features = false, features = ["stream", "rustls-tls"]}
 clap = { version = "4", features = ["cargo", "derive", "env"] }
 openid = "0"
 log = "0"
